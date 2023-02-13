@@ -30,8 +30,8 @@ function retry(){
     local -r retry_cmd="$1"
     local -r retry_msg="$2"
 
-    # times out after 1 minute
-    for i in {1..20}; do
+    # Time out after three minutes.
+    for i in {1..60}; do
         if  eval "$retry_cmd"; then
             return 0
         fi
@@ -165,9 +165,14 @@ function forward_ports(){
     local operator_pod
     operator_pod=$(kubectl get pod -l name=postgres-operator -o jsonpath={.items..metadata.name})
 
-    # runs in the background to keep current terminal responsive
-    # stdout redirect removes the info message about forwarded ports; the message sometimes garbles the cli prompt
-    kubectl port-forward "$operator_pod" "$LOCAL_PORT":"$OPERATOR_PORT" &> /dev/null &
+    # Run in the background to keep current terminal responsive. Hide stdout
+    # because otherwise there is a note about each TCP connection. Do not hide
+    # stderr so port-forward setup errors can be debugged. Sometimes the
+    # port-forward setup fails because expected state isn't achieved yet. in
+    # that, case a bit of retrying helps.
+
+    retry "kubectl port-forward "$operator_pod" "$LOCAL_PORT":"$OPERATOR_PORT" > /dev/null &" \
+        "attempt to create port-forward"
 
     echo $! > "$PATH_TO_PORT_FORWARED_KUBECTL_PID"
 }
