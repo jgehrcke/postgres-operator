@@ -204,7 +204,7 @@ function forward_ports(){
             fi
         done
 
-        if [ ${_pf_success} ]; then
+        if [ ${_pf_success} = true ]; then
             echo "port-forward setup seems successful. leave retry loop."
             break
         fi
