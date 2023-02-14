@@ -184,10 +184,13 @@ function forward_ports(){
         _kubectl_pid=$!
         _pf_success=true
 
-        for i in {1..10}; do
+        # Overall, observe the process for roughly 7 seconds. If it terminates
+        # before that it's certainly an error. If it did not terminate within
+        # that time frame then consider setup successful.
+        for i in {1..7}; do
+            sleep 1
             # Portable and non-blocking test: is process still running?
-            kill -s 0 -- "${_kubectl_pid}" >/dev/null 2>&1
-            if [[ $? == 0 ]]; then
+            if kill -s 0 -- "${_kubectl_pid}" >/dev/null 2>&1; then
                 echo "port-forward process is still running"
             else
                 echo "port-forward process seems to have terminated, reap zombie"
