@@ -175,8 +175,7 @@ function forward_ports(){
     # long-running process if successfully set up. If it does not terminate
     # within N seconds then we consider the setup successful.
 
-    while true
-    do
+    for ia in {1..3}; do
         # With the --pod-running-timeout=4s argument the process is expected
         # to terminate within about that time if the pod isn't ready yet.
         echo "invoke kubectl port-forward command"
@@ -187,7 +186,7 @@ function forward_ports(){
         # Overall, observe the process for roughly 7 seconds. If it terminates
         # before that it's certainly an error. If it did not terminate within
         # that time frame then consider setup successful.
-        for i in {1..7}; do
+        for ib in {1..7}; do
             sleep 1
             # Portable and non-blocking test: is process still running?
             if kill -s 0 -- "${_kubectl_pid}" >/dev/null 2>&1; then
@@ -199,8 +198,9 @@ function forward_ports(){
                 wait $_kubectl_pid
                 _kubectl_rc=$?
                 set -e
-                echo "port-forward process terminated with code ${_kubectl_rc}"
+                echo "port-forward process terminated with exit code ${_kubectl_rc}"
                 _pf_success=false
+                break
             fi
         done
 
@@ -210,7 +210,7 @@ function forward_ports(){
         fi
 
         echo "port-forward setup not sucessful. retry soon."
-        sleep 1
+        sleep 5
     done
 
     echo "${_kubectl_pid}" > "$PATH_TO_PORT_FORWARED_KUBECTL_PID"
