@@ -194,13 +194,15 @@ function forward_ports(){
                 echo "port-forward process is still running"
             else
                 echo "port-forward process seems to have terminated, reap zombie"
+                # Temporarily disable errexit.
+                set +e
                 wait $_kubectl_pid
                 _kubectl_rc=$?
+                set -e
                 echo "port-forward process terminated with code ${_kubectl_rc}"
                 _pf_success=false
             fi
         done
-
 
         if [ ${_pf_success} ]; then
             echo "port-forward setup seems successful. leave retry loop."
