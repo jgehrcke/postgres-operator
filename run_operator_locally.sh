@@ -165,16 +165,50 @@ function forward_ports(){
     local operator_pod
     operator_pod=$(kubectl get pod -l name=postgres-operator -o jsonpath={.items..metadata.name})
 
-    # Run in the background to keep current terminal responsive. Hide stdout
-    # because otherwise there is a note about each TCP connection. Do not hide
-    # stderr so port-forward setup errors can be debugged. Sometimes the
-    # port-forward setup fails because expected state isn't achieved yet. in
-    # that, case a bit of retrying helps.
+    # Spawn `kubectl port-forward` in the background to keep current terminal
+    # responsive. Hide stdout because otherwise there is a note about each TCP
+    # connection. Do not hide stderr so port-forward setup errors can be
+    # debugged. Sometimes the port-forward setup fails because expected k8s
+    # state isn't achieved yet. Try to detect that case and then run the
+    # command again (in a loop). A successful `kubectl port-forward` setup can
+    # pragmatically be detected with a time-based criterion: it is a
+    # long-running process if successfully set up. If it does not terminate
+    # within N seconds then we consider the setup successful.
 
-    retry "kubectl port-forward "$operator_pod" "$LOCAL_PORT":"$OPERATOR_PORT" > /dev/null &" \
-        "attempt to create port-forward"
+    while true
+    do
+        # With the --pod-running-timeout=4s argument the process is expected
+        # to terminate within about that time if the pod isn't ready yet.
+        echo "invoke kubectl port-forward command"
+        kubectl port-forward --pod-running-timeout=4s "$operator_pod" "$LOCAL_PORT":"$OPERATOR_PORT" 1> /dev/null &
+        _kubectl_pid=$!
+        _pf_success=true
 
-    echo $! > "$PATH_TO_PORT_FORWARED_KUBECTL_PID"
+        for i in {1..10}; do
+            # Portable and non-blocking test: is process still running?
+            kill -s 0 -- "${_kubectl_pid}" >/dev/null 2>&1
+            if [[ $? == 0 ]]; then
+                echo "port-forward process is still running"
+            else
+                echo "port-forward process seems to have terminated, reap zombie"
+                wait $_kubectl_pid
+                _kubectl_rc=$?
+                echo "port-forward process terminated with code ${_kubectl_rc}"
+                _pf_success=false
+            fi
+        done
+
+
+        if [ ${_pf_success} ]; then
+            echo "port-forward setup seems successful. leave retry loop."
+            break
+        fi
+
+        echo "port-forward setup not sucessful. retry soon."
+        sleep 1
+    done
+
+    echo "${_kubectl_pid}" > "$PATH_TO_PORT_FORWARED_KUBECTL_PID"
 }
 
 
