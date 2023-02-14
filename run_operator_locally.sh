@@ -170,11 +170,7 @@ function forward_ports(){
     # connection. Do not hide stderr so port-forward setup errors can be
     # debugged. Sometimes the port-forward setup fails because expected k8s
     # state isn't achieved yet. Try to detect that case and then run the
-    # command again (in a loop). A successful `kubectl port-forward` setup can
-    # pragmatically be detected with a time-based criterion: it is a
-    # long-running process if successfully set up. If it does not terminate
-    # within N seconds then we consider the setup successful.
-
+    # command again (in a finite loop).
     for ia in {1..3}; do
         # With the --pod-running-timeout=4s argument the process is expected
         # to terminate within about that time if the pod isn't ready yet.
@@ -183,9 +179,13 @@ function forward_ports(){
         _kubectl_pid=$!
         _pf_success=true
 
-        # Overall, observe the process for roughly 7 seconds. If it terminates
-        # before that it's certainly an error. If it did not terminate within
-        # that time frame then consider setup successful.
+        # A successful `kubectl port-forward` setup can pragmatically be
+        # detected with a time-based criterion: it is a long-running process if
+        # successfully set up. If it does not terminate within deadline then
+        # consider the setup successful. Overall, observe the process for
+        # roughly 7 seconds. If it terminates before that it's certainly an
+        # error. If it did not terminate within that time frame then consider
+        # setup successful.
         for ib in {1..7}; do
             sleep 1
             # Portable and non-blocking test: is process still running?
@@ -193,8 +193,9 @@ function forward_ports(){
                 echo "port-forward process is still running"
             else
                 echo "port-forward process seems to have terminated, reap zombie"
-                # Temporarily disable errexit.
                 set +e
+                # `wait` is now expected to be non-blocking, and exits with the
+                # exit code of pid (first arg).
                 wait $_kubectl_pid
                 _kubectl_rc=$?
                 set -e
@@ -212,6 +213,11 @@ function forward_ports(){
         echo "port-forward setup not sucessful. retry soon."
         sleep 5
     done
+
+    if [ "${_pf_success}" = false ]; then
+        echo "port-forward setup failed after retrying. exit."
+        exit 1
+    fi
 
     echo "${_kubectl_pid}" > "$PATH_TO_PORT_FORWARED_KUBECTL_PID"
 }
