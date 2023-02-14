@@ -171,10 +171,14 @@ function forward_ports(){
     # debugged. Sometimes the port-forward setup fails because expected k8s
     # state isn't achieved yet. Try to detect that case and then run the
     # command again (in a finite loop).
-    for ia in {1..3}; do
+    for _attempt in {1..20}; do
+        # Delay between retry attempts. First attempt should already be
+        # delayed.
+        echo "soon: invoke kubectl port-forward command (attempt $_attempt)"
+        sleep 5
+
         # With the --pod-running-timeout=4s argument the process is expected
         # to terminate within about that time if the pod isn't ready yet.
-        echo "invoke kubectl port-forward command"
         kubectl port-forward --pod-running-timeout=4s "$operator_pod" "$LOCAL_PORT":"$OPERATOR_PORT" 1> /dev/null &
         _kubectl_pid=$!
         _pf_success=true
@@ -192,7 +196,7 @@ function forward_ports(){
             if kill -s 0 -- "${_kubectl_pid}" >/dev/null 2>&1; then
                 echo "port-forward process is still running"
             else
-                echo "port-forward process seems to have terminated, reap zombie"
+                # port-forward process seems to have terminated, reap zombie
                 set +e
                 # `wait` is now expected to be non-blocking, and exits with the
                 # exit code of pid (first arg).
@@ -210,8 +214,6 @@ function forward_ports(){
             break
         fi
 
-        echo "port-forward setup not sucessful. retry soon."
-        sleep 5
     done
 
     if [ "${_pf_success}" = false ]; then
